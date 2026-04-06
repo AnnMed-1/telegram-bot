@@ -3,59 +3,76 @@ package main
 import (
     "log"
     "os"
+    tele "gopkg.in/tucnak/telebot.v2"
+    "os/exec"
     "strings"
-    "time"
-    
-    "gopkg.in/telebot.v2"
 )
+
+var bot *tele.Bot
 
 func main() {
     token := os.Getenv("BOT_TOKEN")
     if token == "" {
-        log.Fatal("BOT_TOKEN is empty")
+        log.Fatal("BOT_TOKEN не найден! Добавь в Railway Variables")
     }
 
-    bot, err := telebot.NewBot(telebot.Settings{
+    pref := tele.Settings{
         Token:  token,
-        Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
-    })
+        Poller: &tele.LongPoller{Timeout: 10 * time.Second},
+    }
+
+    var err error
+    bot, err = tele.NewBot(pref)
     if err != nil {
         log.Fatal(err)
+        return
     }
 
-    log.Println("🎥 SkillSpace Downloader запущен!")
+    log.Println("Бот запущен!")
 
-    bot.Handle("/start", func(m *telebot.Message) {
-        bot.Send(m.Sender, 
-`🎥 SkillSpace Video Downloader
+    // Healthcheck endpoint
+    go func() {
+        http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+            w.WriteHeader(http.StatusOK)
+        })
+        log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
+    }()
 
-📱 Отправь ссылку на видео SkillSpace:
-https://skillspace.ru/embed/...
-https://kinescope.io/...
-
-⏳ Скачаю Full HD MP4 за 1-2 мин!`)
+    bot.Handle("/start", func(c *tele.Context) error {
+        return c.Reply("🎉 Бот работает! Отправь ссылку на YouTube!")
     })
 
-    bot.Handle(telebot.OnText, func(m *telebot.Message) {
-        url := strings.TrimSpace(m.Text)
-        
-        if strings.Contains(url, "skillspace") || strings.Contains(url, "kinescope") {
-            bot.Send(m.Sender, "⏳ Ищу SkillSpace видео...")
-            
-            // Пока заглушка — потом yt-dlp
-            bot.Send(m.Sender, 
-`✅ Видео готово! (демо)
-
-📹 Full HD MP4 скачан
-⏱️ Время: 1:23
-💾 Размер: 245MB
-
-[yt-dlp работает в фоне]`)
-        } else {
-            bot.Send(m.Sender, "❌ Только SkillSpace/Kinescope ссылки!")
+    bot.Handle(tele.OnText, func(c *tele.Context) error {
+        url := c.Text()
+        if strings.Contains(url, "youtube.com") || strings.Contains(url, "youtu.be") {
+            c.Notify(tele.Typing)
+            err := downloadVideo(url, c.Chat())
+            if err != nil {
+                return c.Reply("❌ Ошибка: " + err.Error())
+            }
+            return c.Reply("✅ Видео скачано!")
         }
+        return nil
     })
 
     bot.Start()
 }
-// fix token cache - 2026-04-05
+
+func downloadVideo(url string, chat tele.Recipient) error {
+    // Создаём папку videos
+    os.Mkdir("videos", 0755)
+
+    // yt-dlp скачивает видео
+    cmd := exec.Command("yt-dlp", 
+        "-f", "best[height<=720]", 
+        "--output", "videos/%(title)s.%(ext)s", 
+        url)
+    
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        return fmt.Errorf("yt-dlp failed: %s", string(output))
+    }
+
+    chat.Send(tele.Typing)
+    return nil
+}
