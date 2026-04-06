@@ -3,9 +3,13 @@ package main
 import (
     "log"
     "os"
-    tele "gopkg.in/tucnak/telebot.v2"
+    "fmt"
+    "net/http"
     "os/exec"
     "strings"
+    "time"
+    
+    tele "gopkg.in/tucnak/telebot.v2"
 )
 
 var bot *tele.Bot
@@ -28,18 +32,22 @@ func main() {
         return
     }
 
-    log.Println("Бот запущен!")
+    log.Println("✅ Бот запущен!")
 
-    // Healthcheck endpoint
+    // Healthcheck для Railway
     go func() {
-        http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        http.HandleFunc("/health", func(w http.ResponseWriter, r *tele.Request) {
             w.WriteHeader(http.StatusOK)
         })
-        log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
+        port := os.Getenv("PORT")
+        if port == "" {
+            port = "8080"
+        }
+        log.Fatal(http.ListenAndServe(":"+port, nil))
     }()
 
     bot.Handle("/start", func(c *tele.Context) error {
-        return c.Reply("🎉 Бот работает! Отправь ссылку на YouTube!")
+        return c.Reply("🎉 Бот работает! Отправь ссылку YouTube!")
     })
 
     bot.Handle(tele.OnText, func(c *tele.Context) error {
@@ -50,7 +58,7 @@ func main() {
             if err != nil {
                 return c.Reply("❌ Ошибка: " + err.Error())
             }
-            return c.Reply("✅ Видео скачано!")
+            return c.Reply("✅ Видео готово для скачивания!")
         }
         return nil
     })
@@ -59,10 +67,8 @@ func main() {
 }
 
 func downloadVideo(url string, chat tele.Recipient) error {
-    // Создаём папку videos
     os.Mkdir("videos", 0755)
 
-    // yt-dlp скачивает видео
     cmd := exec.Command("yt-dlp", 
         "-f", "best[height<=720]", 
         "--output", "videos/%(title)s.%(ext)s", 
@@ -73,6 +79,5 @@ func downloadVideo(url string, chat tele.Recipient) error {
         return fmt.Errorf("yt-dlp failed: %s", string(output))
     }
 
-    chat.Send(tele.Typing)
     return nil
 }
