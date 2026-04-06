@@ -2,10 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	tele "gopkg.in/tucnak/telebot.v2"
 )
@@ -16,15 +16,37 @@ func main() {
 		log.Fatal("BOT_TOKEN is empty")
 	}
 
+	publicURL := os.Getenv("PUBLIC_URL")
+	if publicURL == "" {
+		log.Fatal("PUBLIC_URL is empty")
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	webhook := &tele.Webhook{
+		Listen: ":" + port,
+		Endpoint: &tele.WebhookEndpoint{
+			PublicURL: publicURL,
+		},
+	}
+
 	bot, err := tele.NewBot(tele.Settings{
 		Token:  token,
-		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
+		Poller: webhook,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	log.Println("Bot started")
 
 	bot.Handle("/start", func(m *tele.Message) {
 		_, _ = bot.Send(m.Sender, "Отправь ссылку")
@@ -58,5 +80,13 @@ func main() {
 		_ = os.Remove(files[0])
 	})
 
+	go func() {
+		log.Println("HTTP server listening on :" + port)
+		if err := http.ListenAndServe(":"+port, mux); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	log.Println("Bot started")
 	bot.Start()
 }
