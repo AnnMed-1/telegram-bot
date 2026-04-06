@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	tele "gopkg.in/tucnak/telebot.v2"
 )
@@ -17,7 +17,8 @@ func main() {
 	}
 
 	bot, err := tele.NewBot(tele.Settings{
-		Token: token,
+		Token:  token,
+		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -25,13 +26,12 @@ func main() {
 
 	log.Println("Bot started")
 
-	bot.Handle("/start", func(c tele.Context) error {
-		return c.Send("Отправь ссылку")
+	bot.Handle("/start", func(m *tele.Message) {
+		_, _ = bot.Send(m.Sender, "Отправь ссылку")
 	})
 
-	bot.Handle(tele.OnText, func(c tele.Context) error {
-		url := c.Text()
-		_ = c.Notify(tele.Typing)
+	bot.Handle(tele.OnText, func(m *tele.Message) {
+		url := m.Text
 
 		tmpDir := os.TempDir()
 		pattern := filepath.Join(tmpDir, "video.%(ext)s")
@@ -39,23 +39,23 @@ func main() {
 		cmd := exec.Command("yt-dlp", "-o", pattern, url)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return c.Send(fmt.Sprintf("Ошибка:\n%s", string(out)))
+			_, _ = bot.Send(m.Sender, "Ошибка:\n"+string(out))
+			return
 		}
 
 		files, err := filepath.Glob(filepath.Join(tmpDir, "video.*"))
 		if err != nil || len(files) == 0 {
-			return c.Send("Файл скачан, но не найден")
+			_, _ = bot.Send(m.Sender, "Файл скачан, но не найден")
+			return
 		}
 
-		videoPath := files[0]
-		video := &tele.Video{File: tele.FromDisk(videoPath)}
-
-		if err := c.Send(video); err != nil {
-			return c.Send("Не удалось отправить видео: " + err.Error())
+		video := &tele.Video{File: tele.FromDisk(files[0])}
+		_, err = bot.Send(m.Sender, video)
+		if err != nil {
+			_, _ = bot.Send(m.Sender, "Не удалось отправить видео: "+err.Error())
 		}
 
-		_ = os.Remove(videoPath)
-		return nil
+		_ = os.Remove(files[0])
 	})
 
 	bot.Start()
