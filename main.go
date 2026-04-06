@@ -39,15 +39,15 @@ func main() {
 		cmd := exec.Command("yt-dlp", "-o", pattern, url)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return c.Send(fmt.Sprintf("Ошибка запуска команды:\n%s", string(out)))
+			return c.Send(fmt.Sprintf("Ошибка:\n%s", string(out)))
 		}
 
-		matches, _ := filepath.Glob(filepath.Join(tmpDir, "video.*"))
-		if len(matches) == 0 {
-			return c.Send("Файл скачался, но не найден")
+		files, err := filepath.Glob(filepath.Join(tmpDir, "video.*"))
+		if err != nil || len(files) == 0 {
+			return c.Send("Файл скачан, но не найден")
 		}
 
-		videoPath := matches[0]
+		videoPath := files[0]
 		video := &tele.Video{File: tele.FromDisk(videoPath)}
 
 		if err := c.Send(video); err != nil {
