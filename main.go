@@ -1,43 +1,62 @@
 package main
 
 import (
-    "log"
-    "os"
-    "os/exec"
-    
-    tele "gopkg.in/tucnak/telebot.v2"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	tele "gopkg.in/tucnak/telebot.v2"
 )
 
 func main() {
-    bot, err := tele.NewBot(tele.Settings{
-        Token: os.Getenv("BOT_TOKEN"),
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
+	token := os.Getenv("BOT_TOKEN")
+	if token == "" {
+		log.Fatal("BOT_TOKEN is empty")
+	}
 
-    log.Println("Bot started")
+	bot, err := tele.NewBot(tele.Settings{
+		Token: token,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    bot.Handle("/start", func(c *tele.Context) error {
-        return c.Reply("Отправь Skillspace ссылку!")
-    })
+	log.Println("Bot started")
 
-    bot.Handle(tele.OnText, func(c *tele.Context) error {
-        url := c.Text()
-        c.Notify(tele.Typing)
-        
-        // yt-dlp скачивает Skillspace
-        cmd := exec.Command("yt-dlp", url, "-o", "video.%(ext)s")
-        _, err := cmd.Output()
-        if err != nil {
-            return c.Reply("Ошибка: " + err.Error())
-        }
-        
-        video := &tele.Video{File: tele.FromDisk("video.mp4")}
-        c.Send(video)
-        
-        return nil
-    })
+	bot.Handle("/start", func(c tele.Context) error {
+		return c.Send("Отправь ссылку")
+	})
 
-    bot.Start()
+	bot.Handle(tele.OnText, func(c tele.Context) error {
+		url := c.Text()
+		_ = c.Notify(tele.Typing)
+
+		tmpDir := os.TempDir()
+		pattern := filepath.Join(tmpDir, "video.%(ext)s")
+
+		cmd := exec.Command("yt-dlp", "-o", pattern, url)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return c.Send(fmt.Sprintf("Ошибка запуска команды:\n%s", string(out)))
+		}
+
+		matches, _ := filepath.Glob(filepath.Join(tmpDir, "video.*"))
+		if len(matches) == 0 {
+			return c.Send("Файл скачался, но не найден")
+		}
+
+		videoPath := matches[0]
+		video := &tele.Video{File: tele.FromDisk(videoPath)}
+
+		if err := c.Send(video); err != nil {
+			return c.Send("Не удалось отправить видео: " + err.Error())
+		}
+
+		_ = os.Remove(videoPath)
+		return nil
+	})
+
+	bot.Start()
 }
