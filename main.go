@@ -14,17 +14,4 @@ func main() {
     
     bot, err := tele.NewBot(tele.Settings{
         Token:  token,
-        Poller: &tele.LongPoller{Timeout: 10 * time.Second},
-    })
-    if err != nil {
-        log.Fatal("BOT ERROR:", err)
-        return
-    }
-
-    bot.Handle("/start", func(m *tele.Message) {
-        bot.Send(m.Sender, "✅ @Kurses_skil_bot готов!")
-    })
-
-    log.Println("✅ Bot started!")
-    bot.Start()
-}
+        Poller
