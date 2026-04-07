@@ -10,10 +10,7 @@ import (
 
 func main() {
     token := os.Getenv("BOT_TOKEN")
-    if token == "" {
-        log.Fatal("BOT_TOKEN пустой!")
-        return
-    }
+    log.Printf("Запуск с токеном: %s...", token[:10])
     
     bot, err := tele.NewBot(tele.Settings{
         Token:  token,
@@ -25,7 +22,7 @@ func main() {
     }
 
     bot.Handle("/start", func(c tele.Context) error {
-        return c.Reply("✅ Skillspace Downloader готов!")
+        return c.Reply("✅ @Kurses_skil_bot готов!")
     })
 
     log.Println("✅ Bot started!")
