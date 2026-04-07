@@ -1,45 +1,33 @@
 package main
 
 import (
-    "fmt"
     "log"
-    "net/http"
     "os"
     "time"
     
-    tele "gopkg.in/telebot.v2"
+    tele "gopkg.in/tucnak/telebot.v2"
 )
 
 func main() {
-    port := os.Getenv("PORT")
-    if port == "" { port = "8080" }
-    
-    // Healthcheck
-    go func() {
-        http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-            w.Header().Set("Content-Type", "text/plain")
-            w.WriteHeader(200)
-            fmt.Fprint(w, "ok")
-        })
-        log.Printf("✅ Healthcheck :%s/health", port)
-        log.Fatal(http.ListenAndServe(":"+port, nil))
-    }()
-
-    // Bot LongPoller
     token := os.Getenv("BOT_TOKEN")
+    if token == "" {
+        log.Fatal("BOT_TOKEN пустой!")
+        return
+    }
+    
     bot, err := tele.NewBot(tele.Settings{
         Token:  token,
         Poller: &tele.LongPoller{Timeout: 10 * time.Second},
     })
     if err != nil {
-        log.Fatal("❌ BOT ERROR:", err)
+        log.Fatal("BOT ERROR:", err)
         return
     }
 
     bot.Handle("/start", func(c tele.Context) error {
-        return c.Reply("✅ @Kurses_skil_bot готов!")
+        return c.Reply("✅ Skillspace Downloader готов!")
     })
 
-    log.Println("✅ Bot started - пиши /start!")
+    log.Println("✅ Bot started!")
     bot.Start()
 }
