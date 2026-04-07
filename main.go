@@ -21,8 +21,8 @@ func main() {
         return
     }
 
-    bot.Handle("/start", func(c tele.Context) error {
-        return c.Reply("✅ @Kurses_skil_bot готов!")
+    bot.Handle("/start", func(m *tele.Message) {
+        bot.Send(m.Sender, "✅ @Kurses_skil_bot готов!")
     })
 
     log.Println("✅ Bot started!")
